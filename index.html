@@ -107,7 +107,243 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   // ⚠️ นำ URL ของคุณมาวาง
-  const API_URL = "https://script.google.com/macros/s/AKfycby9gJgABsHO2EPJTgd1o-KNRGiuhSupzXQ56yT28IUhAw_FbxUGfeepWnrDBYDy5ggF/exec";
+  const API_URL = "<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Transformer Inventory</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, sans-serif; }
+    .nav-tabs .nav-link.active { font-weight: bold; color: #0d6efd; border-bottom: 3px solid #0d6efd; background: transparent; border-top: none; border-left: none; border-right: none;}
+    .nav-tabs .nav-link { color: #6c757d; border: none; }
+    .card-graphic { border-left: 5px solid; transition: transform 0.2s; }
+    .card-graphic:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.1); }
+    .border-issue { border-color: #dc3545; }
+    .border-return { border-color: #198754; }
+    .row-red { background-color: #ffe6e6 !important; }
+    .row-green { background-color: #e6ffe6 !important; }
+  </style>
+</head>
+<body>
+
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-end mb-4">
+    <div>
+      <h2 class="fw-bold text-dark m-0">⚡ ระบบบริหารคลังหม้อแปลง</h2>
+      <p class="text-muted m-0">รองรับระบบขอรายการ, ยืนยันหน้างาน และนับคลังสิ้นเดือน</p>
+    </div>
+    <button class="btn btn-warning fw-bold shadow-sm" onclick="triggerMonthlyClose()">📅 นับคลังประจำเดือน (ตัดยอด)</button>
+  </div>
+
+  <ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active fs-5" id="stock-tab" data-bs-toggle="tab" data-bs-target="#stockPane" type="button" role="tab">📦 หมวดคลัง (สต็อกทั้งหมด)</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link fs-5" id="action-tab" data-bs-toggle="tab" data-bs-target="#actionPane" type="button" role="tab">🔄 หมวดจ่าย/คืน (หน้างาน)</button>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="myTabContent">
+    
+    <div class="tab-pane fade show active" id="stockPane" role="tabpanel">
+      <div class="card p-4 shadow-sm border-0">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <input type="text" id="searchInput" class="form-control w-50" placeholder="🔍 ค้นหารหัส หรือ ขนาดหม้อแปลง..." onkeyup="filterTable()">
+          <button class="btn btn-outline-primary" onclick="loadData()">🔄 โหลดข้อมูลล่าสุด</button>
+        </div>
+        <div class="table-responsive" style="max-height: 60vh;">
+          <table class="table table-hover align-middle" id="mainTable">
+            <thead class="table-dark sticky-top">
+              <tr>
+                <th>รหัสหม้อแปลง</th>
+                <th>ขนาด kVA / รายละเอียด</th>
+                <th>สถานะในระบบ</th>
+              </tr>
+            </thead>
+            <tbody id="stockTableBody">
+              <tr><td colspan="3" class="text-center">กำลังโหลดข้อมูล...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="actionPane" role="tabpanel">
+      <div class="row g-4">
+        
+        <div class="col-md-4">
+          <div class="card p-4 shadow-sm border-0">
+            <h5 class="fw-bold mb-3 text-primary">📝 สร้างคิว เบิก/รับคืน</h5>
+            <form id="pendingForm">
+              <div class="mb-3">
+                <label class="form-label">ประเภท</label>
+                <select id="actionType" class="form-select" onchange="toggleDescField()">
+                  <option value="เบิก">📤 ต้องการเบิกออก</option>
+                  <option value="รับคืน">📥 ต้องการรับคืนเข้า</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">รหัสหม้อแปลง</label>
+                <input type="text" id="actionId" class="form-control" required placeholder="เช่น TR-001">
+              </div>
+              <div class="mb-3" id="descGroup" style="display: none;">
+                <label class="form-label">ขนาด / รายละเอียด (กรณีรับคืน)</label>
+                <input type="text" id="actionDesc" class="form-control" placeholder="เช่น 250kVA 3Phase">
+              </div>
+              <button type="submit" class="btn btn-primary w-100 fw-bold">สร้างคิวรอหน้างาน</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="col-md-8">
+          <div class="card p-4 shadow-sm border-0" style="min-height: 100%;">
+            <h5 class="fw-bold mb-3 text-secondary">⏳ รายชื่อรอดำเนินการหน้างาน</h5>
+            <div class="row g-3" id="pendingGrid">
+              <div class="col-12 text-center text-muted mt-5">ยังไม่มีรายการรอดำเนินการ</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // ⚠️ นำ URL ของคุณมาวาง
+  const API_URL = "https://script.google.com/macros/s/AKfycbxhrU2sY3D9s1aY23ZJkLYRq7NStaV_ojBCgEN1FCY/dev";
+  let globalData = [];
+
+  window.onload = loadData;
+
+  function toggleDescField() {
+    const type = document.getElementById("actionType").value;
+    document.getElementById("descGroup").style.display = type === "รับคืน" ? "block" : "none";
+  }
+
+  function loadData() {
+    fetch(`${API_URL}?action=getInventory`)
+      .then(res => res.json())
+      .then(res => {
+        globalData = res.data || [];
+        renderStockTable();
+        renderPendingGrid();
+      });
+  }
+
+  // สร้างตารางหมวดคลัง
+  function renderStockTable() {
+    let tbody = document.getElementById("stockTableBody");
+    tbody.innerHTML = "";
+    globalData.forEach(p => {
+      let trClass = p.status === "เบิกออกแล้ว" ? "row-red" : (p.status === "รับเข้าใหม่" ? "row-green" : "");
+      let badge = `<span class="badge bg-secondary">${p.status}</span>`;
+      if(p.status === "อยู่ในคลัง") badge = `<span class="badge bg-dark">อยู่ในคลัง</span>`;
+      else if(p.status.includes("รอ")) badge = `<span class="badge bg-warning text-dark">${p.status}</span>`;
+      else if(p.status === "เบิกออกแล้ว") badge = `<span class="badge bg-danger">เบิกออกแล้ว (รอตัดคลัง)</span>`;
+      else if(p.status === "รับเข้าใหม่") badge = `<span class="badge bg-success">รับเข้าใหม่ (รอตัดคลัง)</span>`;
+
+      tbody.innerHTML += `<tr class="${trClass}">
+        <td class="fw-bold">${p.id}</td>
+        <td>${p.desc}</td>
+        <td>${badge}</td>
+      </tr>`;
+    });
+  }
+
+  // ระบบค้นหา
+  function filterTable() {
+    let input = document.getElementById("searchInput").value.toLowerCase();
+    let rows = document.querySelectorAll("#mainTable tbody tr");
+    rows.forEach(row => {
+      let text = row.innerText.toLowerCase();
+      row.style.display = text.includes(input) ? "" : "none";
+    });
+  }
+
+  // สร้างกราฟิกการ์ดหมวด จ่าย/คืน
+  function renderPendingGrid() {
+    let grid = document.getElementById("pendingGrid");
+    grid.innerHTML = "";
+    let pendingItems = globalData.filter(p => p.status === "รอเบิกออก" || p.status === "รอรับเข้า");
+    
+    if(pendingItems.length === 0) {
+      grid.innerHTML = `<div class="col-12 text-center text-muted mt-4">ไม่มีรายการรอดำเนินการ</div>`;
+      return;
+    }
+
+    pendingItems.forEach(p => {
+      let isIssue = p.status === "รอเบิกออก";
+      let borderClass = isIssue ? "border-issue" : "border-return";
+      let icon = isIssue ? "📤 กำลังเบิกออก" : "📥 กำลังรับเข้า";
+      let btnClass = isIssue ? "btn-danger" : "btn-success";
+      let targetStatus = isIssue ? "เบิกออกแล้ว" : "รับเข้าใหม่";
+
+      grid.innerHTML += `
+        <div class="col-md-6">
+          <div class="card card-graphic p-3 ${borderClass} bg-white shadow-sm">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <span class="badge text-dark bg-light mb-2">${icon}</span>
+                <h5 class="fw-bold m-0">${p.id}</h5>
+                <small class="text-muted">${p.desc}</small>
+              </div>
+              <button class="btn btn-sm ${btnClass} fw-bold" onclick="confirmJob('${p.id}', '${targetStatus}')">✅ ยืนยันเสร็จงาน</button>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // Submit สร้างคิว
+  document.getElementById("pendingForm").addEventListener("submit", e => {
+    e.preventDefault();
+    let type = document.getElementById("actionType").value;
+    let id = document.getElementById("actionId").value;
+    let desc = document.getElementById("actionDesc").value;
+
+    fetch(`${API_URL}?action=addPending&id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}&desc=${encodeURIComponent(desc)}`)
+      .then(res => res.json())
+      .then(res => {
+        alert(res.message);
+        document.getElementById("pendingForm").reset();
+        toggleDescField();
+        loadData();
+      });
+  });
+
+  // ยืนยันจบงาน (กาสี)
+  function confirmJob(id, targetStatus) {
+    if(!confirm(`ยืนยันว่ารายการ ${id} เสร็จสิ้นหน้างานแล้วใช่หรือไม่?`)) return;
+    
+    fetch(`${API_URL}?action=confirmAction&id=${encodeURIComponent(id)}&type=${encodeURIComponent(targetStatus)}`)
+      .then(res => res.json())
+      .then(res => {
+        alert(res.message);
+        loadData(); // โหลดใหม่เพื่อให้ตารางกาสีแดง/เขียว
+      });
+  }
+
+  // นับคลังสิ้นเดือน
+  function triggerMonthlyClose() {
+    if(!confirm("⚠️ คำเตือน: การกดปุ่มนี้จะลบหม้อแปลงที่ 'เบิกออกแล้ว(สีแดง)' ออกจากระบบ และเปลี่ยนหม้อแปลงที่ 'รับเข้าใหม่(สีเขียว)' ให้เป็นของในคลังปกติ คุณตรวจสอบยอดคลังตรงแล้วใช่หรือไม่?")) return;
+    
+    fetch(`${API_URL}?action=monthlyClose`)
+      .then(res => res.json())
+      .then(res => {
+        alert(res.message);
+        loadData();
+      });
+  }
+</script>
+</body>
+</html>";
   let globalData = [];
 
   window.onload = loadData;
